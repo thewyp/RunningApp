@@ -4,9 +4,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.FusedLocationProviderClient
+import com.amap.api.location.AMapLocationClient
+import com.amap.api.location.AMapLocationClientOption
+import com.amap.api.location.CoordinateConverter
 import com.thewyp.runningapp.R
 import com.thewyp.runningapp.other.Constants.ACTION_SHOW_TRACKING_FRAGMENT
+import com.thewyp.runningapp.other.Constants.FASTEST_LOCATION_INTERVAL
+import com.thewyp.runningapp.other.Constants.LOCATION_TIME_OUT
 import com.thewyp.runningapp.other.Constants.NOTIFICATION_CHANNEL_ID
 import com.thewyp.runningapp.ui.MainActivity
 import dagger.Module
@@ -22,9 +26,30 @@ object ServiceModule {
 
     @ServiceScoped
     @Provides
-    fun provideFusedLocationProviderClient(
+    fun provideCoordinateConverter(
         @ApplicationContext app: Context
-    ) = FusedLocationProviderClient(app)
+    ) = CoordinateConverter(app)
+
+    @ServiceScoped
+    @Provides
+    fun provideAMapLocationClientOption() =
+        AMapLocationClientOption().apply {
+            locationPurpose = AMapLocationClientOption.AMapLocationPurpose.Sport
+            locationMode = AMapLocationClientOption.AMapLocationMode.Hight_Accuracy
+            interval = FASTEST_LOCATION_INTERVAL
+            isMockEnable = true
+            httpTimeOut = LOCATION_TIME_OUT
+        }
+
+    @ServiceScoped
+    @Provides
+    fun provideAMapLocationClient(
+        @ApplicationContext app: Context,
+        option: AMapLocationClientOption
+    ) = AMapLocationClient(app).apply {
+        setLocationOption(option)
+    }
+
 
     @ServiceScoped
     @Provides

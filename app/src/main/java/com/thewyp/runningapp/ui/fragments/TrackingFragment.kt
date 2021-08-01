@@ -5,49 +5,42 @@ import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.model.PolylineOptions
+import com.amap.api.maps2d.AMap
+import com.amap.api.maps2d.CameraUpdateFactory
+import com.amap.api.maps2d.model.CameraPosition
+import com.amap.api.maps2d.model.PolylineOptions
 import com.thewyp.runningapp.R
 import com.thewyp.runningapp.databinding.FragmentTrackingBinding
 import com.thewyp.runningapp.other.Constants.ACTION_PAUSE_SERVICE
 import com.thewyp.runningapp.other.Constants.ACTION_START_OR_RESUME_SERVICE
-import com.thewyp.runningapp.other.Constants.MAP_ZOOM
 import com.thewyp.runningapp.other.Constants.POLYLINE_COLOR
 import com.thewyp.runningapp.other.Constants.POLYLINE_WIDTH
-import com.thewyp.runningapp.other.TrackingUtility
 import com.thewyp.runningapp.services.Polyline
 import com.thewyp.runningapp.services.TrackingService
 import com.thewyp.runningapp.ui.viewmodels.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import timber.log.Timber
 
 @AndroidEntryPoint
 class TrackingFragment : Fragment(R.layout.fragment_tracking) {
 
     private val viewModel: MainViewModel by viewModels()
 
-    private var isTracking = false
-    private var pathPoints = mutableListOf<Polyline>()
-
     private var _binding: FragmentTrackingBinding? = null
     private val binding get() = _binding!!
-    private var map: GoogleMap? = null
 
-    private var curTimeInMillis = 0L
+    private var mMap: AMap? = null
+
+    private var isTracking = false
+    private var pathPoints = mutableListOf<Polyline>()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = FragmentTrackingBinding.bind(view)
         binding.mapView.onCreate(savedInstanceState)
-        binding.mapView.getMapAsync {
-            map = it
-            addAllPolylines()
-        }
-
+        mMap = binding.mapView.map
+        addAllPolylines()
         binding.btnToggleRun.setOnClickListener {
             toggleRun()
         }
-
         subscribeToObservers()
     }
 
@@ -55,19 +48,48 @@ class TrackingFragment : Fragment(R.layout.fragment_tracking) {
         TrackingService.isTracking.observe(viewLifecycleOwner, {
             updateTracking(it)
         })
-
         TrackingService.pathPoints.observe(viewLifecycleOwner, {
-            Timber.d("location update!!!")
             pathPoints = it
             addLatestPolyline()
             moveCameraToUser()
         })
+    }
 
-        TrackingService.timeRunInMillis.observe(viewLifecycleOwner, {
-            curTimeInMillis = it
-            val formattedTime = TrackingUtility.getFormattedStopWatchTime(curTimeInMillis, true)
-            binding.tvTimer.text = formattedTime
-        })
+    private fun addAllPolylines() {
+        for (polyline in pathPoints) {
+            mMap?.addPolyline(
+                PolylineOptions().apply {
+                    addAll(polyline)
+                    width(POLYLINE_WIDTH)
+                    color(POLYLINE_COLOR)
+                }
+            )
+        }
+    }
+
+    private fun addLatestPolyline() {
+        if (pathPoints.isNotEmpty() && pathPoints.last().size > 1) {
+            val preLastLatLng = pathPoints.last()[pathPoints.last().size - 2]
+            val lastLatLng = pathPoints.last().last()
+            mMap?.addPolyline(
+                PolylineOptions().apply {
+                    add(preLastLatLng)
+                    add(lastLatLng)
+                    width(POLYLINE_WIDTH)
+                    color(POLYLINE_COLOR)
+                }
+            )
+        }
+    }
+
+    private fun moveCameraToUser() {
+        if (pathPoints.isNotEmpty() && pathPoints.last().isNotEmpty()) {
+            mMap?.moveCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition(pathPoints.last().last(), 100f, 30f, 0f)
+                )
+            )
+        }
     }
 
     private fun toggleRun() {
@@ -89,51 +111,11 @@ class TrackingFragment : Fragment(R.layout.fragment_tracking) {
         }
     }
 
-    private fun moveCameraToUser() {
-        if (pathPoints.isNotEmpty() && pathPoints.last().isNotEmpty()) {
-            map?.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(
-                    pathPoints.last().last(),
-                    MAP_ZOOM
-                )
-            )
-        }
-    }
-
-    private fun addAllPolylines() {
-        for (polyline in pathPoints) {
-            val polylineOptions = PolylineOptions()
-                .color(POLYLINE_COLOR)
-                .width(POLYLINE_WIDTH)
-                .addAll(polyline)
-            map?.addPolyline(polylineOptions)
-        }
-    }
-
-    private fun addLatestPolyline() {
-        Timber.d(pathPoints.toString())
-        if (pathPoints.isNotEmpty() && pathPoints.last().size > 1) {
-            val preLastLatLng = pathPoints.last()[pathPoints.last().size - 2]
-            val lastLatLng = pathPoints.last().last()
-            val polylineOptions = PolylineOptions()
-                .color(POLYLINE_COLOR)
-                .width(POLYLINE_WIDTH)
-                .add(preLastLatLng)
-                .add(lastLatLng)
-            map?.addPolyline(polylineOptions)
-        }
-    }
-
     private fun sendCommandToService(action: String) =
         Intent(requireContext(), TrackingService::class.java).also {
             it.action = action
             requireContext().startService(it)
         }
-
-    override fun onStart() {
-        super.onStart()
-        binding.mapView.onStart()
-    }
 
     override fun onResume() {
         super.onResume()
@@ -150,18 +132,9 @@ class TrackingFragment : Fragment(R.layout.fragment_tracking) {
         binding.mapView.onSaveInstanceState(outState)
     }
 
-    override fun onStop() {
-        super.onStop()
-        binding.mapView.onStop()
-    }
-
-    override fun onLowMemory() {
-        super.onLowMemory()
-        binding.mapView.onLowMemory()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onDestroyView() {
+        super.onDestroyView()
+        binding.mapView.onDestroy()
         _binding = null
     }
 }
