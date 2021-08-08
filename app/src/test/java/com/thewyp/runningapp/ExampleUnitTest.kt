@@ -1,8 +1,7 @@
 package com.thewyp.runningapp
 
+import org.junit.Assert.assertEquals
 import org.junit.Test
-
-import org.junit.Assert.*
 import java.util.concurrent.TimeUnit
 
 /**
@@ -14,6 +13,12 @@ class ExampleUnitTest {
     @Test
     fun addition_isCorrect() {
         assertEquals(4, 2 + 2)
+    }
+
+    @Test
+    fun testString() {
+        val string = ""
+        assertEquals(string.isEmpty(), true)
     }
 
     @Test
